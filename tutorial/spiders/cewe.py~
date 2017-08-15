@@ -1,0 +1,118 @@
+from scrapy.spiders import Spider
+from tutorial.items import FlexItem
+# from tutorial.loaders import MypicLoader
+from scrapy.loader.processors import TakeFirst
+from scrapy.http import Request
+# from scrapy_evo_common.loaders.loader_helper_funcs import clean_uni, get_dec
+from scrapy.loader.processors import Compose
+from w3lib.html import remove_tags
+import hashlib
+# from scrapy_evo_common.utils.utils import _build_loader_class
+from scrapy.exceptions import CloseSpider
+# import sys
+# import os
+# import django
+# from scrapy.conf import settings as scrapy_settings
+# SCRAPY_BASE_DIR = scrapy_settings['PROJECT_ROOT']
+# DJANGO_DIR = os.path.join(SCRAPY_BASE_DIR, '../../../', 'evofrontend')
+# sys.path.insert(0, DJANGO_DIR)
+# os.environ.setdefault("DJANGO_SETTINGS_MODULE", 'evofrontend.settings')
+# django.setup()
+# from django.core.exceptions import ObjectDoesNotExist
+
+take_first = TakeFirst()
+
+
+def clean_price(price_string):
+    m = Compose(remove_tags, unicode.strip, clean_uni, get_dec)
+    return m(price_string)
+
+
+class CeweSpider(Spider):
+
+    name = "Cewes"
+    allowed_domains = ["cewe.fr", ]
+
+    start_urls = ['https://cewe.fr/']
+
+    exclude_text = []
+    exclude_href = []
+
+    # Override settings for this specific spider, using custom_settings attr
+        # Required fields
+    required_base_fields = ['product_name', 'merchant_product_id']
+    required_price_fields = []  # Because it could be either price options or pocket_price
+
+    # Just hardcode for now
+    merchant_id = 68
+
+    def start_requests(self):
+        '''
+        Kick off. Make the extract_firstrst request to the target URL and callback to parse
+        '''
+        cewe_urls = self.start_urls
+
+        for cewe_url in cewe_urls:
+            self.logger.debug('Start requests %s' % cewe_url)
+            yield Request(url=cewe_url, callback=self.parse)
+
+    def parse(self, response):
+        '''
+        Extract all category links
+
+        cewe.fr can behave quite oddly. The splash page seems to need js, but
+        if you just hit a category, it seems to work
+        '''
+        category_links = [('Partenaires Datas', 'http://www.cewe.fr/partenaires.html'),
+                          ('Tirage Datas', 'http://www.cewe.fr/tirages-photo.html'),
+                          ]
+        for clink in category_links:
+            cname = clink[0]
+            chref = clink[1]
+            # chref = make_valid_url(chref, reference_url=response.url)
+            if cname == 'Partenaires Datas':
+                self.logger.debug('Requesting %s category with URL %s' % (cname, chref))
+                yield Request(url=chref, callback=self.parsePartenairesPhotos,
+                              meta={'base_url': chref})
+            if cname == 'Tirage Datas':
+                self.logger.debug('Requesting %s category with URL %s' % (cname, chref))
+                yield Request(url=chref, callback=self.parseTirageDatas,
+                              meta={'base_url': chref})
+
+
+    # ########################## Photos  CHAIN #############################
+
+    def parsePartenairesPhotos(self, response):
+        """
+
+        Crawling the data from http://www.cewe.fr/tirages-photo.html
+        Partenaires photos
+
+        """
+        cal_types = response.xpath('//div[@class="cw_nt"]')
+        for cal_type in cal_types:
+            partenaires_dict = {}
+            partenaires_dict['partenaires__image_urls'] = cal_type.xpath('.//img/@src').extract_first()
+            yield partenaires_dict
+
+    def parseTirageDatas(self, response):
+        """
+
+        Crawling the data from http://www.cewe.fr/tirages-photo.html
+        tirages photos and its title
+
+        """
+        cal_types = response.xpath('//div[@id="cw_teaser_wrapper"]')
+        
+        
+
+        
+        for cal_type in cal_types:
+            tirage_dict = {}
+            tirage_dict['tirage_to_banner_image'] = cal_type.xpath('//div[@class="cw_teaser_catpage_top_bigsize "]/img/@src').extract_first()
+            tirage_dict['tirage_to_banner_image_title'] = cal_type.xpath('//div/h1/@text()').extract_first()
+            print 'cal_types+++++++++++++++++++',tirage_dict,cal_types
+            yield tirage_dict
+
+
+        #    

@@ -1,0 +1,11 @@
+# The MSSQL Writer pipeline (not stored in pipelines.py because of the size)
+# Don't forget to add your pipeline to the ITEM_PIPELINES setting
+import datetime
+from scrapy.loader.processors import TakeFirst
+# from scrapy_evo_common.pipelines.mssqlwriter import BaseMSSQLWriter
+from collections import defaultdict
+# from scrapy.conf import settings
+take_first = TakeFirst()
+
+
+
